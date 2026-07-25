@@ -1,6 +1,6 @@
 dist/
 .bin/
-loopbudget-claude-code
-loopbudget-cursor
+/loopbudget-claude-code
+/loopbudget-cursor
 *.exe
 .DS_Store
