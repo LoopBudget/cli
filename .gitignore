@@ -1,0 +1,5 @@
+dist/
+.bin/
+loopbudget-claude-code
+*.exe
+.DS_Store
