@@ -18,12 +18,16 @@ var AllowedHosts = map[string]struct{}{
 }
 
 type Config struct {
-	BaseURL          string
-	APIKey           string
-	PriceIn          float64
-	PriceOut         float64
-	StatePath        string
-	CredentialsPath  string // empty if env-only
+	BaseURL         string
+	APIKey          string
+	PriceIn         float64
+	PriceOut        float64
+	StatePath       string
+	CredentialsPath string
+	CursorHome      string
+	PollMS          int
+	CatchUp         bool
+	ProjectFilter   string
 }
 
 func HomeDir() string {
@@ -34,10 +38,7 @@ func HomeDir() string {
 	return filepath.Join(h, ".loopbudget")
 }
 
-func CredentialsPath() string { return filepath.Join(HomeDir(), "credentials") }
-func DefaultStatePath() string {
-	return filepath.Join(HomeDir(), "claude-code-state.json")
-}
+func CredentialsFile() string { return filepath.Join(HomeDir(), "credentials") }
 
 func EnsureHomeDir() error {
 	dir := HomeDir()
@@ -98,55 +99,93 @@ func AssertSafeBaseURL(raw string) (string, error) {
 	return u.Scheme + "://" + u.Host, nil
 }
 
-func Load() (Config, error) {
+func loadFileVars() (map[string]string, string, error) {
 	fileVars := map[string]string{}
 	credPath := ""
-	path := CredentialsPath()
+	path := CredentialsFile()
 	if st, err := os.Stat(path); err == nil {
 		credPath = path
 		if runtime.GOOS != "windows" {
 			mode := st.Mode().Perm()
 			if mode&0o077 != 0 {
-				return Config{}, fmt.Errorf("%s mode is %o; fix with: chmod 600 %s", path, mode, path)
+				return nil, "", fmt.Errorf("%s mode is %o; fix with: chmod 600 %s", path, mode, path)
 			}
 		}
 		raw, err := os.ReadFile(path)
 		if err != nil {
-			return Config{}, err
+			return nil, "", err
 		}
 		fileVars = ParseDotEnv(string(raw))
 	}
+	return fileVars, credPath, nil
+}
 
-	getenv := func(k, fallback string) string {
-		if v := os.Getenv(k); v != "" {
-			return v
-		}
-		if v, ok := fileVars[k]; ok && v != "" {
-			return v
-		}
-		return fallback
+func getenv(fileVars map[string]string, k, fallback string) string {
+	if v := os.Getenv(k); v != "" {
+		return v
 	}
-
-	baseRaw := getenv("LOOPBUDGET_URL", "https://loopbudget.com")
-	apiKey := getenv("LOOPBUDGET_API_KEY", "")
-	priceIn, _ := strconv.ParseFloat(getenv("PRICE_IN_PER_M", "3"), 64)
-	priceOut, _ := strconv.ParseFloat(getenv("PRICE_OUT_PER_M", "15"), 64)
-	statePath := getenv("STATE_PATH", DefaultStatePath())
-
-	if apiKey == "" {
-		return Config{}, fmt.Errorf("missing LOOPBUDGET_API_KEY. Run: loopbudget-claude-code init\n(writes %s)", CredentialsPath())
+	if v, ok := fileVars[k]; ok && v != "" {
+		return v
 	}
-	base, err := AssertSafeBaseURL(baseRaw)
+	return fallback
+}
+
+func LoadClaude() (Config, error) {
+	fileVars, credPath, err := loadFileVars()
 	if err != nil {
 		return Config{}, err
+	}
+	apiKey := getenv(fileVars, "LOOPBUDGET_API_KEY", "")
+	if apiKey == "" {
+		return Config{}, fmt.Errorf("missing LOOPBUDGET_API_KEY. Run: loopbudget-claude-code init\n(writes %s)", CredentialsFile())
+	}
+	base, err := AssertSafeBaseURL(getenv(fileVars, "LOOPBUDGET_URL", "https://loopbudget.com"))
+	if err != nil {
+		return Config{}, err
+	}
+	priceIn, _ := strconv.ParseFloat(getenv(fileVars, "PRICE_IN_PER_M", "3"), 64)
+	priceOut, _ := strconv.ParseFloat(getenv(fileVars, "PRICE_OUT_PER_M", "15"), 64)
+	return Config{
+		BaseURL:         base,
+		APIKey:          apiKey,
+		PriceIn:         priceIn,
+		PriceOut:        priceOut,
+		StatePath:       getenv(fileVars, "STATE_PATH", filepath.Join(HomeDir(), "claude-code-state.json")),
+		CredentialsPath: credPath,
+	}, nil
+}
+
+func LoadCursor() (Config, error) {
+	fileVars, credPath, err := loadFileVars()
+	if err != nil {
+		return Config{}, err
+	}
+	apiKey := getenv(fileVars, "LOOPBUDGET_API_KEY", "")
+	if apiKey == "" {
+		return Config{}, fmt.Errorf("missing LOOPBUDGET_API_KEY. Run: loopbudget-claude-code init\n(or set %s)", CredentialsFile())
+	}
+	base, err := AssertSafeBaseURL(getenv(fileVars, "LOOPBUDGET_URL", "https://loopbudget.com"))
+	if err != nil {
+		return Config{}, err
+	}
+	priceIn, _ := strconv.ParseFloat(getenv(fileVars, "PRICE_IN_PER_M", "3"), 64)
+	priceOut, _ := strconv.ParseFloat(getenv(fileVars, "PRICE_OUT_PER_M", "15"), 64)
+	home, _ := os.UserHomeDir()
+	pollMS, _ := strconv.Atoi(getenv(fileVars, "POLL_MS", "1500"))
+	if pollMS < 500 {
+		pollMS = 500
 	}
 	return Config{
 		BaseURL:         base,
 		APIKey:          apiKey,
 		PriceIn:         priceIn,
 		PriceOut:        priceOut,
-		StatePath:       statePath,
+		StatePath:       getenv(fileVars, "STATE_PATH", filepath.Join(HomeDir(), "cursor-sidecar-state.json")),
 		CredentialsPath: credPath,
+		CursorHome:      getenv(fileVars, "CURSOR_HOME", filepath.Join(home, ".cursor")),
+		PollMS:          pollMS,
+		CatchUp:         getenv(fileVars, "CATCH_UP", "") == "1",
+		ProjectFilter:   getenv(fileVars, "PROJECT_FILTER", ""),
 	}, nil
 }
 
@@ -158,8 +197,8 @@ func WriteCredentials(baseURL, apiKey string) (string, error) {
 	if err := EnsureHomeDir(); err != nil {
 		return "", err
 	}
-	path := CredentialsPath()
-	body := "# LoopBudget Claude Code hook — keep mode 600. Do not commit.\n" +
+	path := CredentialsFile()
+	body := "# LoopBudget CLI — keep mode 600. Do not commit.\n" +
 		"LOOPBUDGET_URL=" + safe + "\n" +
 		"LOOPBUDGET_API_KEY=" + apiKey + "\n"
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {

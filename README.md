@@ -2,20 +2,22 @@
 
 Public, zero-Node tooling for [LoopBudget](https://loopbudget.com).
 
-The app platform is private; this repo is the public source + releases for client connectors.
+| Binary | Role |
+| --- | --- |
+| `loopbudget-claude-code` | Claude Code **Stop** hook → `/api/ingest` |
+| `loopbudget-cursor` | Cursor transcript sidecar → `/api/ingest` |
 
-## `loopbudget-claude-code`
-
-Claude Code **Stop** hook → LoopBudget `/api/ingest`.
+## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/LoopBudget/cli/main/install.sh | VERSION=0.1.0 bash
+curl -fsSL https://raw.githubusercontent.com/LoopBudget/cli/main/install.sh | VERSION=0.2.0 bash
 export PATH="$HOME/.loopbudget/bin:$PATH"
-loopbudget-claude-code init
-loopbudget-claude-code doctor
+loopbudget-claude-code init   # writes ~/.loopbudget/credentials (mode 600)
 ```
 
-Wire `~/.claude/settings.json` (no secrets):
+Install one tool only: `TOOLS=cursor VERSION=0.2.0 bash …`
+
+## Claude Code
 
 ```json
 {
@@ -30,11 +32,22 @@ Wire `~/.claude/settings.json` (no secrets):
 }
 ```
 
-Threat model: [SECURITY.md](./SECURITY.md)
-
-### Build from source
+## Cursor
 
 ```bash
-go build -o loopbudget-claude-code .
+# credentials already from init — optional filter:
+PROJECT_FILTER=my-project loopbudget-cursor
+```
+
+## Threat model
+
+[SECURITY.md](./SECURITY.md)
+
+## Build
+
+```bash
+go test ./...
+go build -o loopbudget-claude-code ./cmd/loopbudget-claude-code
+go build -o loopbudget-cursor ./cmd/loopbudget-cursor
 ./scripts/release.sh
 ```

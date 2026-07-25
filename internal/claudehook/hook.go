@@ -1,4 +1,4 @@
-package hook
+package claudehook
 
 import (
 	"bytes"
@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/LoopBudget/cli/internal/config"
-	"github.com/LoopBudget/cli/internal/estimate"
 )
 
 type stateFile struct {
@@ -27,20 +26,20 @@ type tokenPair struct {
 }
 
 type hookPayload struct {
-	SessionID      string `json:"session_id"`
-	SessionIDCamel string `json:"sessionId"`
-	TranscriptPath string `json:"transcript_path"`
+	SessionID       string `json:"session_id"`
+	SessionIDCamel  string `json:"sessionId"`
+	TranscriptPath  string `json:"transcript_path"`
 	TranscriptCamel string `json:"transcriptPath"`
 }
 
 type ingestBody struct {
-	ExternalSessionID  string `json:"externalSessionId"`
-	ProfileName        string `json:"profileName"`
-	ConnectorKind      string `json:"connectorKind"`
-	TokensIn           int    `json:"tokensIn"`
-	TokensOut          int    `json:"tokensOut"`
-	CostCentsEstimate  int    `json:"costCentsEstimate"`
-	EventType          string `json:"eventType"`
+	ExternalSessionID string `json:"externalSessionId"`
+	ProfileName       string `json:"profileName"`
+	ConnectorKind     string `json:"connectorKind"`
+	TokensIn          int    `json:"tokensIn"`
+	TokensOut         int    `json:"tokensOut"`
+	CostCentsEstimate int    `json:"costCentsEstimate"`
+	EventType         string `json:"eventType"`
 }
 
 func costCents(tokensIn, tokensOut int, priceIn, priceOut float64) int {
@@ -75,7 +74,6 @@ func saveState(path string, s stateFile) error {
 	return os.WriteFile(path, raw, 0o600)
 }
 
-// RunStopHook reads Claude Code Stop JSON from stdin and POSTs usage deltas.
 func RunStopHook(cfg config.Config, stdin io.Reader, stdout, stderr io.Writer) error {
 	raw, _ := io.ReadAll(stdin)
 	var hook hookPayload
@@ -97,7 +95,7 @@ func RunStopHook(cfg config.Config, stdin io.Reader, stdout, stderr io.Writer) e
 		transcript = hook.TranscriptCamel
 	}
 
-	tok := estimate.FromTranscript(transcript)
+	tok := FromTranscript(transcript)
 	st := loadState(cfg.StatePath)
 	prev := st.Sessions[sessionID]
 	deltaIn := tok.In - prev.TokensIn

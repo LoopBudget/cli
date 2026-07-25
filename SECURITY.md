@@ -1,32 +1,39 @@
-# Security model — `loopbudget-claude-code`
+# Security model — LoopBudget CLI
 
-Static Go binary. No Node runtime. Treat it like any privileged local agent connector.
+Static Go binaries. No Node runtime.
 
-## What it can access
+## Shared
 
 | Resource | Access |
 | --- | --- |
 | `~/.loopbudget/credentials` | Read (mode must be `600`) |
-| Claude Code Stop stdin | `session_id`, `transcript_path` |
-| Transcript file path from stdin | Read-only (`EvalSymlinks`) |
-| `~/.loopbudget/claude-code-state.json` | Read/write token deltas |
 | Network | `POST {allowlisted-origin}/api/ingest` only |
 
-It does **not** shell out, install packages at runtime, or upload transcript text — only derived token counts and cost estimates.
+URL allowlist: `loopbudget.com` / `www` (HTTPS) + loopback. API keys must not appear on argv (`init` writes the credentials file).
 
-## Trust chain (GA)
+## `loopbudget-claude-code`
 
-1. Install a **version-pinned** binary from [GitHub Releases](https://github.com/LoopBudget/cli/releases) (or the install script that verifies `SHA256SUMS`).
-2. Prefer reviewing `SHA256SUMS` on the release page before piping install scripts.
-3. **Never** put `LOOPBUDGET_API_KEY` in `.claude/settings.json` or on the hook `command` line.
-4. Store secrets with `loopbudget-claude-code init` → `~/.loopbudget/credentials` (`chmod 600`). The CLI **refuses to start** if the key appears on argv.
-5. **URL allowlist**: only `loopbudget.com` / `www.loopbudget.com` (HTTPS) and loopback for local dev.
-6. Source: [`cli/loopbudget-claude-code`](https://github.com/LoopBudget/cli).
+| Resource | Access |
+| --- | --- |
+| Claude Stop stdin | `session_id`, `transcript_path` |
+| Transcript path from stdin | Read-only |
+| `~/.loopbudget/claude-code-state.json` | Token deltas |
 
-## What leaves your machine
+## `loopbudget-cursor`
 
-JSON to `/api/ingest`: session id, profile name, connector kind, token deltas, cost estimate. No prompt/response bodies.
+| Resource | Access |
+| --- | --- |
+| `~/.cursor/projects/**/agent-transcripts/*.jsonl` | Read (byte-offset tail) |
+| `~/.loopbudget/cursor-sidecar-state.json` | Offsets |
 
-## Reporting issues
+Estimates tokens from transcript text (chars÷4). Does **not** upload transcript bodies — only derived counts.
 
-https://github.com/LoopBudget/loopbudget/issues
+## Trust chain
+
+1. Install a **version-pinned** release from [GitHub Releases](https://github.com/LoopBudget/cli/releases); verify `SHA256SUMS`.
+2. Prefer `loopbudget-claude-code init` over putting keys in shell history / settings JSON.
+3. Source: https://github.com/LoopBudget/cli
+
+## Reporting
+
+https://github.com/LoopBudget/cli/issues

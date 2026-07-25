@@ -1,11 +1,11 @@
-package estimate_test
+package claudehook_test
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/LoopBudget/cli/internal/estimate"
+	"github.com/LoopBudget/cli/internal/claudehook"
 )
 
 func TestFromTranscriptUsage(t *testing.T) {
@@ -17,7 +17,7 @@ func TestFromTranscriptUsage(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tok := estimate.FromTranscript(path)
+	tok := claudehook.FromTranscript(path)
 	if tok.In != 100 || tok.Out != 50 {
 		t.Fatalf("got %+v", tok)
 	}
@@ -32,7 +32,7 @@ func TestFromTranscriptCharFallback(t *testing.T) {
 	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	tok := estimate.FromTranscript(path)
+	tok := claudehook.FromTranscript(path)
 	if tok.In != 0 || tok.Out != 10 {
 		t.Fatalf("got %+v want out=10", tok)
 	}

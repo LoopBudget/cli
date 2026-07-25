@@ -1,4 +1,4 @@
-package estimate
+package claudehook
 
 import (
 	"bufio"
